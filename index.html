@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    #canvas, #otrocanvas {
+        display: none;
+    }
+</style>
+    <title>Clasificador de frutas V3</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+</head>
+<body>
+    <h1>Clasificador de frutas</h1>
+    <video id="video" width="640" height="480" autoplay></video>
+    <button id="iniciar">Iniciar cámara</button>
+    <canvas id="canvas" width="640" height="480"></canvas>
+    <canvas id="otrocanvas" width="100" height="100"></canvas> <!-- Changed to 100x100 -->
+    <h2 id="resultado"></h2>
+
+    <script>
+        let video = document.getElementById("video");
+        let canvas = document.getElementById("canvas");
+        let otrocanvas = document.getElementById("otrocanvas");
+        let contexto = canvas.getContext("2d");
+        let modelo;
+
+        (async() => {
+            console.log("Cargando modelo...");
+            modelo = await tf.loadLayersModel("model.json");
+            console.log("Modelo cargado");
+        })();
+
+        document.getElementById("iniciar").addEventListener("click", function() {
+            let stream = navigator.mediaDevices.getUserMedia({video: true});
+            stream.then(function(mediaStream) {
+                video.srcObject = mediaStream;
+                video.onloadedmetadata = function(e) {
+                    video.play();
+                    requestAnimationFrame(predecir); // Solicitamos la primera animación aquí
+                };
+            });
+        });
+
+        function predecir() {
+            if (modelo != null) {
+                contexto.drawImage(video, 0, 0, 640, 480);
+
+                let otroContexto = otrocanvas.getContext("2d");
+                otroContexto.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, otrocanvas.width, otrocanvas.height);
+
+                let ctx2 = otrocanvas.getContext("2d");
+                let imgData = ctx2.getImageData(0,0, 100, 100);  <!-- Changed to 100x100 -->
+
+                let arr = [];
+                let arr100 = [];
+
+                for (let p=0; p < imgData.data.length; p+= 4) {
+                    let rojo = imgData.data[p] / 255;
+                    let verde = imgData.data[p+1] / 255;
+                    let azul = imgData.data[p+2] / 255;
+
+                    arr100.push([rojo, verde, azul]);
+                    if (arr100.length == 100) {
+                        arr.push(arr100);
+                        arr100 = [];
+                    }
+                }
+
+                arr = [arr];
+
+                let tensor = tf.tensor4d(arr);
+                let resultado = modelo.predict(tensor).dataSync();
+
+                let frutas = ["Aguacate", "Plátano","Corn","Kiwi","Limes","Mango","Onion White","Pear", "Pepper Red", "Tomato"];
+
+                let indiceFruta = resultado.indexOf(Math.max(...resultado));
+                document.getElementById("resultado").innerText = "Resultado: " + frutas[indiceFruta];
+            }
+            requestAnimationFrame(predecir); // Solicitamos la próxima animación aquí
+        }
+    </script>
+</body>
+</html>
